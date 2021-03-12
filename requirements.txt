@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+
+# For plotting
+plotly
+kaleido
+numpy

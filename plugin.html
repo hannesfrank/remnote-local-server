@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.jsdelivr.net/gh/remnoteio/remnote-api@latest/RemNoteAPI.js"></script>
+    <title>RemNote Local Server</title>
+    <script>
+      const API = "http://localhost:8000";
+      async function runCommand(command) {
+        const context = await RemNoteAPI.v0.get_context();
+        const focusedRem = await RemNoteAPI.v0.get(context.remId);
+        const documentRem = await RemNoteAPI.v0.get(context.documentId);
+
+        await command(context, focusedRem, documentRem);
+        await RemNoteAPI.v0.close_popup();
+      }
+      async function writeRem() {
+        await runCommand(async (context, focusedRem, documentRem) => {
+          const resp = await fetch(`${API}/rem/${focusedRem._id}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              // TODO: Assuming only plain text for now
+              name: focusedRem.name[0],
+              content: focusedRem.content && focusedRem.content[0],
+            }),
+          });
+          console.info("Write Rem:", await resp.json());
+        });
+      }
+
+      async function readRem() {
+        await runCommand(async (context, focusedRem, documentRem) => {
+          const resp = await fetch(`${API}/rem/${focusedRem._id}`);
+          const rem = await resp.json();
+
+          if (resp.status === 200) {
+            if (rem.name)
+              RemNoteAPI.v0.update(focusedRem._id, {
+                ...rem,
+              });
+          }
+          console.info("Read Rem:", rem);
+        });
+      }
+
+      async function sendPage() {
+        await runCommand(async (context, focusedRem, documentRem) => {
+          const resp = await fetch(`${API}/send-page`, {
+            method: "PUT",
+            body: JSON.stringify({
+              // TODO: You'd load more info about all rem on the page here before.
+              ...documentRem,
+            }),
+          });
+          console.info("Send Page:", await resp.json());
+        });
+      }
+      async function runShellCommand() {
+        await runCommand(async (context, focusedRem, documentRem) => {
+          // Note: You could even check for the language and do different things for different languages.
+          const command = focusedRem.name[0].text;
+          console.info("Run Command:", command);
+
+          const resp = await fetch(`${API}/run-command`, {
+            method: "POST",
+            body: JSON.stringify({
+              command,
+            }),
+          });
+          const res = await resp.json();
+          console.info("Command Result:", res);
+        });
+      }
+      async function evalPython() {
+        await runCommand(async (context, focusedRem, documentRem) => {
+          // Note: You could even check for the language and do different things for different languages.
+          const python = focusedRem.name[0].text;
+          console.info("eval() Python:", python);
+
+          const resp = await fetch(`${API}/eval-python`, {
+            method: "POST",
+            body: JSON.stringify({
+              remId: focusedRem._id,
+              code: python,
+            }),
+          });
+          const res = await resp.json();
+          console.info("eval() Python Result:", res);
+          if (resp.ok) {
+            await RemNoteAPI.v0.create(res.output, focusedRem._id);
+          }
+        });
+      }
+      async function execPython() {
+        await runCommand(async (context, focusedRem, documentRem) => {
+          const python = focusedRem.name[0].text;
+          console.info("exec() Python:", python);
+
+          const resp = await fetch(`${API}/exec-python`, {
+            method: "POST",
+            body: JSON.stringify({
+              remId: focusedRem._id,
+              code: python,
+            }),
+          });
+          const res = await resp.json();
+          console.info("exec() Python Result:", res);
+          if (resp.ok && res.output) {
+            await RemNoteAPI.v0.create(res.output, focusedRem._id);
+          }
+        });
+      }
+      async function makeDiagram() {
+        // TODO: Make a more declarative interface for diagram generation, e.g. set
+        // diagram type, data, params different child rem that could be templated in
+        await runCommand(async (context, focusedRem, documentRem) => {
+          const python = focusedRem.name[0].text;
+          console.info("Make Diagram:", python);
+
+          const resp = await fetch(`${API}/make-diagram`, {
+            method: "POST",
+            body: JSON.stringify({
+              remId: focusedRem._id,
+              code: python,
+            }),
+          });
+          const res = await resp.json();
+          console.info("Make Diagram Result:", res);
+          if (resp.ok && res.output) {
+            await RemNoteAPI.v0.create(res.output, focusedRem._id);
+          }
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <button onclick="writeRem()">Write Rem</button>
+    <button onclick="readRem()">Read Rem</button>
+    <button onclick="sendPage()">Send Page</button>
+    <button onclick="runShellCommand()">Run in Shell</button>
+    <button onclick="evalPython()">eval() Python</button>
+    <button onclick="execPython()">exec() Python</button>
+    <button onclick="makeDiagram()">Make Diagram</button>
+    <!-- To run and exit a command just do. This is glitchy atm though:
+      - the focus on the previously edited rem is lost
+      - you can not completely hide the popup - it always flashes -->
+    <!-- <script>
+      (async function () {
+        await evalPython();
+        await RemNoteAPI.v0.close_popup();
+      })();
+    </script> -->
+  </body>
+</html>
